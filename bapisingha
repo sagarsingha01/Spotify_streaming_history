@@ -1,0 +1,155 @@
+import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+# load dataset
+df=pd.read_csv("/Users/bapisingha/Desktop/spotify_history.csv")
+
+# Show the first few rows
+print(df.head())
+
+# Show basic info
+print("\nDataset Info:")
+print(df.info())
+print(df.shape)
+
+# Print summary statistics
+print("\nSummary stats:")
+print(df.describe()) # count,mean,std,min,max(stats)
+
+# --------------------------------------------
+# 1. Handling Missing Values
+# --------------------------------------------
+
+print("\nMissing values:")
+print(df.isnull().sum())
+
+# Fill numeric columns with mean
+numeric_cols = df.select_dtypes(include=[np.number]).columns
+df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+
+# Fill categorical columns with mode
+categorical_cols = df.select_dtypes(include=['object']).columns
+for col in categorical_cols:
+    df[col] = df[col].fillna(df[col].mode()[0])
+
+
+# --------------------------------------------
+# 2. Exploratory Data Analysis (EDA)
+# --------------------------------------------
+
+# Pairplot of numerical features
+sns.pairplot(df.select_dtypes(include=[np.number]))
+plt.suptitle("Pairplot of Numerical Features", y=1.02)
+plt.show()
+
+# Histogram for numeric columns
+df.select_dtypes(include=[np.number]).hist(bins=30, figsize=(15, 10))
+plt.suptitle("Histograms of Numeric Features", y=1.02)
+plt.tight_layout()
+plt.show()
+
+# --------------------------------------------
+# 6. Categorical Comparisons (Bar & Pie Charts)
+# --------------------------------------------
+
+# 6.1 Top 10 Albums by Frequency
+top_albums = df['album_name'].value_counts().head(10)
+plt.figure(figsize=(10,6))
+sns.barplot(x=top_albums.values, y=top_albums.index, hue=top_albums.index, palette='viridis', legend=False)
+plt.title("Top 10 Albums")
+plt.xlabel("Play Count")
+plt.ylabel("Album Name")
+plt.tight_layout()
+plt.show()
+
+# 6.2 Reason for Starting a Track (reason_start)
+reason_start_counts = df['reason_start'].value_counts()
+plt.figure(figsize=(6,6))
+plt.pie(reason_start_counts, labels=reason_start_counts.index, autopct='%1.1f%%', startangle=140)
+plt.title("Track Start Reasons")
+plt.axis('equal')
+plt.tight_layout()
+plt.show()
+
+# 6.3 Skip Rate
+skip_counts = df['skipped'].value_counts()
+plt.figure(figsize=(6,4))
+sns.barplot(x=skip_counts.index.astype(str), y=skip_counts.values, hue=skip_counts.index.astype(str), palette='Set2', legend=False)
+plt.title("Skip Count Distribution")
+plt.xlabel("Skipped")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.show()
+
+# 6.4 Platform Usage
+platform_counts = df['platform'].value_counts()
+plt.figure(figsize=(6,4))
+sns.barplot(x=platform_counts.index, y=platform_counts.values, hue=platform_counts.index, palette='coolwarm', legend=False)
+plt.title("Platform Usage")
+plt.xlabel("Platform")
+plt.ylabel("Count")
+plt.tight_layout()
+plt.show()
+
+# --------------------------------------------
+# 7. Hypothesis Testing (t-test)
+# --------------------------------------------
+
+from scipy.stats import ttest_ind
+
+if 'ms_played' in df.columns and 'artist_name' in df.columns:
+    artists = df['artist_name'].dropna().unique()
+    if len(artists) >= 2:
+        group1 = df[df['artist_name'] == artists[0]]['ms_played']
+        group2 = df[df['artist_name'] == artists[1]]['ms_played']
+        t_stat, p_val = ttest_ind(group1, group2, equal_var=False)
+        print(f"\nT-test between '{artists[0]}' and '{artists[1]}': t-stat={t_stat:.2f}, p-value={p_val:.4f}")
+    else:
+        print("Not enough distinct artists for t-test.")
+else:
+    print("Required columns not found for hypothesis testing.")
+
+# --------------------------------------------
+# 8. Skewed Variable Distribution (Log Scale)
+# --------------------------------------------
+
+if 'ms_played' in df.columns:
+    plt.figure()
+    sns.histplot(df['ms_played'], bins=50)
+    plt.title('Original ms_played Distribution')
+    plt.show()
+
+    plt.figure()
+    sns.histplot(np.log1p(df['ms_played']), bins=50)
+    plt.title('Log-Transformed ms_played Distribution')
+    plt.show()
+
+# --------------------------------------------
+# 9. Outlier Detection
+# --------------------------------------------
+
+# IQR Method
+if 'ms_played' in df.columns:
+    Q1 = df['ms_played'].quantile(0.25)
+    Q3 = df['ms_played'].quantile(0.75)
+    IQR = Q3 - Q1
+    outliers_iqr = df[(df['ms_played'] < Q1 - 1.5 * IQR) | (df['ms_played'] > Q3 + 1.5 * IQR)]
+    print(f"\nOutliers using IQR method: {outliers_iqr.shape[0]}")
+
+# Z-score Method
+from scipy.stats import zscore
+df['z_ms_played'] = zscore(df['ms_played'])
+outliers_z = df[(df['z_ms_played'] > 3) | (df['z_ms_played'] < -3)]
+print(f"Outliers using Z-score method: {outliers_z.shape[0]}")
+
+# --------------------------------------------
+# 10. Highlight Extreme Cases
+# --------------------------------------------
+
+print("\nTop 5 extreme high playtime tracks:")
+if {'track_name', 'artist_name', 'ms_played'}.issubset(df.columns):
+    print(df.nlargest(5, 'ms_played')[['track_name', 'artist_name', 'ms_played']])
+else:
+    print("Required columns not found to display top 5 tracks.")
